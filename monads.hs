@@ -1,10 +1,10 @@
 {-
-    Attempted functional replicas of Haskell's Maybe and linked list types.
+    Attempted functional replicas of Haskell's Maybe, State, and linked list.
 -}
 import Control.Applicative
 import Data.Bits
 {-
-    "Maybe" type analogue.
+    "Maybe" analogue.
 -}
 data Perhaps a = Present a | Absent
     deriving Show
@@ -34,6 +34,55 @@ instance Alternative Perhaps where
     (<|>) :: Perhaps a -> Perhaps a -> Perhaps a
     Absent <|> x = x
     Present x <|> _ = Present x
+{-
+    "State" analogue.
+-}
+newtype Status s a = Status {
+    advance :: s -> (a, s)
+}
+instance Functor (Status s) where
+    fmap :: (a -> b) -> Status s a -> Status s b
+    fmap f st = Status $ \s ->
+        let (a, s') = advance st s
+        in (f a, s')
+instance Applicative (Status s) where
+    pure :: a -> Status s a
+    pure x = Status $ \s -> (x, s)
+    (<*>) :: Status s (a -> b) -> Status s a -> Status s b
+    stf <*> stn = Status $ \s -> 
+        let (f, s') = advance stf s
+            (n, s'') = advance stn s'
+        in (f n, s'')
+instance Monad (Status s) where
+    (>>=) :: Status s a -> (a -> Status s b) -> Status s b
+    st >>= f = Status $ \s ->
+        let (a, s') = advance st s
+        in advance (f a) s'
+{-
+    Get.
+-}
+retrieve :: Status s s
+retrieve = Status $ \st -> (st, st)
+{-
+    Put.
+-}
+specify :: s -> Status s ()
+specify st = Status $ \_ -> ((), st)
+{-
+    Modify.
+-}
+alter :: (s -> s) -> Status s ()
+alter f = Status $ \st -> ((), f st)
+{-
+    EvalState.
+-}
+evaluate :: Status s a -> s -> a
+evaluate st sf = fst $ advance st sf
+{-
+    ExecState.
+-}
+execute :: Status s a -> s -> s
+execute st sf = snd $ advance st sf
 {- 
     Singly linked list.
 -}
@@ -239,3 +288,12 @@ normalize ::
     List a -> b -> List b
 normalize chain factor = 
     (/ factor) <$> ((fromIntegral) <$> chain)
+{-
+    Counts instances of an item in a list.
+-}
+countInst ::
+    (Eq a) => 
+    a -> List a -> Int
+countInst item Nil = 0
+countInst item (head :+ tail) = x + countInst item tail where
+    x = if item == head then 1 else 0
